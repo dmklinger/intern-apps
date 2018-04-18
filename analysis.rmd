@@ -1,0 +1,127 @@
+---
+title: "LA Budget Initial Analysis"
+author: "David Klinger"
+date: "April 17, 2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(ggplot2)
+library(reshape2)
+```
+
+```{r}
+budget <- read.csv(file="budget.csv", header=TRUE, sep=",")
+```
+
+## Preliminary Steps
+
+I downloaded the City Budget Expenditures. They can be found here: https://controllerdata.lacity.org/Budget/City-Budget-Expenditures/uyzw-yi8n
+
+For the sake of scope, I limited myself to three categories: Year, Department Name, and Total Budget. In excel, I disregarded all entries with negative or 0 total budgets. Since each row was differentiated by \textit{fund}, rather than \textit{department}, I wrote a short python script (data_concat.py) to take the data, merge all funds that went to the same department (i.e. sum the total budgets for all entries where the year and department matches), and output a "long" (rather than tall) csv for ease of manipulating in R.
+
+## Findings - A Data Story
+
+```{r}
+
+decrease <- function(init,final) {
+  diff <- init - final
+  change <- diff/init
+  return(change*100)
+}
+increase <- function(init,final) {
+  diff <- final - init
+  change <- diff/init
+  return(change*100)
+}
+
+d_17_18 <- decrease(sum(budget$X2017),sum(budget$X2018))
+i_16_17 <- increase(sum(budget$X2016),sum(budget$X2017))
+i_15_16 <- increase(sum(budget$X2015),sum(budget$X2016))
+i_14_15 <- increase(sum(budget$X2014),sum(budget$X2015))
+i_13_14 <- increase(sum(budget$X2013),sum(budget$X2014))
+i_12_13 <- increase(sum(budget$X2012),sum(budget$X2013))
+mean_i <- mean(c(i_16_17,i_15_16,i_14_15,i_13_14,i_12_13))
+
+general_decrease <- decrease(budget$X2017[32],budget$X2018[32])
+general_s_increase <- increase(budget$X2012[22],budget$X2018[22])
+```
+
+At first glance, the total budget appeared to steadily increase until 2017, and then was dramatically cut in 2018. Looking at the total budget as a bar graph, however, shows that the differences were much more incrimental, though not insigificant. There was a `r d_17_18`\% decrease from 2018 to 2017 after average yearly increases of `r mean_i`\%. 
+
+Broken down by the largest departments (there were too many departments to show them all) shows the likely source of this cut: Non-Departmental General funds were cut by a staggering `r general_decrease`\% after years of steady increases, and this was the largest category in the budget. Most departments, however, seem to have fairly steady growth over the years. Even if there are years where they are cut.
+
+Looking through the data, I found 2 cases of particulary interesting budgeting. The Coliseum/Sports Arena Budget was extremely high in 2012 and 2013, cut to a fraction in 2014, and cut completely in 2015. Not being incredibly familiar with LA, I do not know which sports arena, exactly, they were funding, but whatever it was, they stopped in 2015. 
+
+Similarly, the cannabis department received no funding until 2018, and then they were funded by a little over $2,000,000. Since Cannibis was illegal until then, this is not surprising: but I wonder what the Cannibis department is doing and why it could not be consolidated into a different department. My guess is it handles licenses. 
+
+## Further Steps & Questions to Ask
+
+Due to lack of time, and my relative unfamiliarity with R (I found, by experimentation, that doing most of the data manipulation in Python and using R to only display the data is much easier), I did not get as much done as I would have liked. A natural further step is looking closer at indidual departments, and generating (and plotting) budgetary changes between now and the year before, three years before, the 2012 baseline, and average change over time. 
+
+Also, the original data-set was extremely comprehensive, with each Department Broken down by individual uses and accounts---so I could see, for example, exactly what non-Departmental General funds that were dramatically cut were used for and what was cut. But again, I did not have time to analyze this and, given infinite time, likely would. 
+
+The only thing that's missing from the dataset that I would like to ask is data on how the budget is created. Which politicians voted for what? Who decides how to allocate it? Why was the budget cut in 2018?
+
+I think the most useful thing to do with this data is make it readable and publicize it. Transparency in government is often difficult to achieve and making an easy tool where everyone in LA can see where the city is spending its money will go a long way towards that goal. 
+
+## Graphs - Exploratory Analysis (Moved to end for Space Efficiency)
+
+```{r}
+total_budget <- c(sum(budget$X2012),
+                  sum(budget$X2013),
+                  sum(budget$X2014),
+                  sum(budget$X2015),
+                  sum(budget$X2016),
+                  sum(budget$X2017),
+                  sum(budget$X2018))
+total_budget <- total_budget/100
+year <- c("2012","2013","2014","2015","2016","2017","2018")
+totals <- data.frame(year,total_budget)
+ggplot(data=totals,aes(x=year,y=total_budget, group = 1)) + geom_line() +
+  geom_point() + labs(x="year",y="budget in $",title="Total Budget by Year")
+
+ggplot(data=totals,aes(x=year,y=total_budget, group = 1)) + geom_bar(stat="identity",width=0.5) + labs(x="year",y="budget in $",title="Total Budget by Year")
+```
+\newpage
+```{r, fig.width = 10,fig.height=10}
+threshold <- 30000000000
+large_budget <- budget[which(budget$X2012 >= threshold),]
+
+tall_budget <- melt(large_budget, id=c("Department"), variable.name="year", value.name = "budget")
+tall_budget$budget <- tall_budget$budget/100
+ggplot(data=tall_budget,aes(x=year,y=budget,group=Department)) + geom_line(aes(color=Department))+
+  geom_point() + 
+  labs(x = "year", y = "budget in $", title="Budget of Largest Departments by Year") +
+  theme(legend.position="bottom",legend.direction="vertical")
+```
+
+
+```{r,fig.height=4}
+coliseum_budget <- c(budget$X2012[11],
+                     budget$X2013[11],
+                     budget$X2014[11],
+                     budget$X2015[11],
+                     budget$X2016[11],
+                     budget$X2017[11],
+                     budget$X2018[11])
+coliseum_budget <- coliseum_budget/100
+year <- c("2012","2013","2014","2015","2016","2017","2018")
+c_budget <- data.frame(year,coliseum_budget)
+ggplot(data=totals,aes(x=year,y=coliseum_budget, group = 1)) + geom_line() +
+  geom_point() + labs(x="year",y="budget in $",title="Coliseum/Sports Arena Budget by Year")
+
+cannabis_budget <- c(budget$X2012[4],
+                     budget$X2013[4],
+                     budget$X2014[4],
+                     budget$X2015[4],
+                     budget$X2016[4],
+                     budget$X2017[4],
+                     budget$X2018[4])
+cannabis_budget <- cannabis_budget/100
+year <- c("2012","2013","2014","2015","2016","2017","2018")
+c_budget <- data.frame(year,cannabis_budget)
+ggplot(data=totals,aes(x=year,y=cannabis_budget, group = 1)) + geom_line() +
+  geom_point() + labs(x="year",y="budget in $",title="Cannabis Budget by Year")
+```
